@@ -19,7 +19,7 @@ async def ingest_usage_event(
     payload: UsageEvent,
     x_internal_key: str | None = Header(default=None, alias="X-Internal-Key"),
     db: firestore.Client = Depends(get_firestore_client),
-    request: Request | None = None,
+    request: Request = None,
 ) -> UsageIngestResponse:
     event = payload.dict()
     event.setdefault("eventId", event["requestId"])
