@@ -144,31 +144,50 @@ def finalize_event(
 
 def parse_gemini_usage(response_json: Dict[str, Any]) -> Dict[str, int]:
     LOGGER.info("Parsing Gemini usage", extra={"payload": response_json})
-    usage = response_json.get("usageMetadata") or response_json.get("usage_metadata") or response_json.get("usage") or {}
-    input_tokens = _to_int(
-        usage.get("promptTokenCount")
-        or usage.get("prompt_tokens")
-        or usage.get("inputTokens")
-        or usage.get("input_tokens")
-    )
-    output_tokens = _to_int(
-        usage.get("candidatesTokenCount")
-        or usage.get("completionTokenCount")
-        or usage.get("completion_tokens")
-        or usage.get("outputTokens")
-        or usage.get("output_tokens")
-    )
-    total_tokens = _to_int(
-        usage.get("totalTokenCount")
-        or usage.get("total_tokens")
-        or usage.get("totalTokens")
-        or input_tokens + output_tokens
-    )
-    return {
-        "inputTokens": input_tokens,
-        "outputTokens": output_tokens,
-        "totalTokens": total_tokens,
-    }
+    usage = _resolve_usage_payload(response_json)
+    return _parse_token_counts(usage)
+
+
+def parse_openai_usage(response_json: Dict[str, Any]) -> Dict[str, int]:
+    LOGGER.info("Parsing OpenAI usage", extra={"payload": response_json})
+    usage = _resolve_usage_payload(response_json)
+    return _parse_token_counts(usage)
+
+
+def enrich_usage_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    provider = (event.get("provider") or DEFAULT_PROVIDER).lower()
+    raw_usage = event.get("rawUsage") or {}
+    if not isinstance(raw_usage, dict):
+        raw_usage = {}
+    if raw_usage and (event.get("inputTokens") is None or event.get("outputTokens") is None):
+        if provider == "openai":
+            usage = parse_openai_usage(raw_usage)
+        elif provider == "gemini":
+            usage = parse_gemini_usage(raw_usage)
+        else:
+            usage = _parse_token_counts(raw_usage)
+        if usage:
+            event.setdefault("inputTokens", usage.get("inputTokens", 0))
+            event.setdefault("outputTokens", usage.get("outputTokens", 0))
+            event.setdefault("totalTokens", usage.get("totalTokens", 0))
+
+    input_tokens = _to_int(event.get("inputTokens"))
+    output_tokens = _to_int(event.get("outputTokens"))
+    if (input_tokens or output_tokens) and not event.get("costUSD"):
+        model = event.get("model") or ""
+        currency = event.get("userCurrency") or DEFAULT_CURRENCY
+        cost_usd = _calculate_cost_usd_safe(model, input_tokens, output_tokens)
+        cost_local, fx_payload = _calculate_local_cost(cost_usd, currency)
+        event.setdefault("costUSD", round(cost_usd, 6))
+        event.setdefault("cost", {"amount": round(cost_local, 6), "currency": currency})
+        event.setdefault("fx", fx_payload)
+        event.setdefault(
+            "costCalculationVersion",
+            event.get("costCalculationVersion") or DEFAULT_COST_CALCULATION_VERSION,
+        )
+        if event.get("costTRY") is None:
+            event["costTRY"] = round(_calculate_cost_try(cost_usd), 6)
+    return _compact(event)
 
 
 def _calculate_cost_usd_safe(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -210,6 +229,60 @@ def _to_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _resolve_usage_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if any(
+        key in payload
+        for key in (
+            "promptTokenCount",
+            "candidatesTokenCount",
+            "prompt_tokens",
+            "completion_tokens",
+            "inputTokens",
+            "outputTokens",
+            "total_tokens",
+            "totalTokenCount",
+            "totalTokens",
+        )
+    ):
+        return payload
+    usage = payload.get("usageMetadata") or payload.get("usage_metadata") or payload.get("usage") or {}
+    return usage if isinstance(usage, dict) else {}
+
+
+def _parse_token_counts(usage: Dict[str, Any]) -> Dict[str, int]:
+    input_tokens = _to_int(
+        usage.get("promptTokenCount")
+        or usage.get("prompt_tokens")
+        or usage.get("inputTokens")
+        or usage.get("input_tokens")
+    )
+    output_tokens = _to_int(
+        usage.get("candidatesTokenCount")
+        or usage.get("completionTokenCount")
+        or usage.get("completion_tokens")
+        or usage.get("outputTokens")
+        or usage.get("output_tokens")
+    )
+    total_tokens = _to_int(
+        usage.get("totalTokenCount")
+        or usage.get("total_tokens")
+        or usage.get("totalTokens")
+        or input_tokens + output_tokens
+    )
+    return {
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": total_tokens,
+    }
+
+
+def _calculate_cost_try(cost_usd: float) -> float:
+    if not cost_usd:
+        return 0.0
+    fx = _FX_CACHE.get_or_fetch("USD", "TRY")
+    return cost_usd * fx.rate
 
 
 def _merge_metadata(

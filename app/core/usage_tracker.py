@@ -234,4 +234,9 @@ def _parse_timestamp(value: Any) -> dt.datetime:
         return value
     if isinstance(value, (int, float)):
         return dt.datetime.utcfromtimestamp(value)
+    if isinstance(value, str):
+        try:
+            return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return dt.datetime.utcfromtimestamp(int(value))
     return dt.datetime.utcfromtimestamp(int(value))

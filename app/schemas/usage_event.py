@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 class UsageEvent(BaseModel):
     requestId: str = Field(..., description="Unique request identifier for idempotency")
     userId: str = Field(..., description="User identifier")
-    timestamp: int = Field(..., description="Unix epoch seconds in UTC")
+    timestamp: Union[int, str] = Field(..., description="Unix epoch seconds in UTC")
     action: str = Field(..., description="High-level action name (e.g. analyze_pdf)")
     eventId: Optional[str] = Field(None, description="Event identifier (defaults to requestId)")
     endpoint: Optional[str] = None
@@ -17,6 +17,7 @@ class UsageEvent(BaseModel):
     userCurrency: Optional[str] = None
     plan: Optional[Dict[str, Any]] = None
     metadata: Optional[Dict[str, Any]] = None
+    rawUsage: Optional[Dict[str, Any]] = None
     inputTokens: Optional[int] = None
     outputTokens: Optional[int] = None
     totalTokens: Optional[int] = None

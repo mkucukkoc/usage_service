@@ -6,6 +6,7 @@ from google.cloud import firestore
 
 from app.config.logger import get_logger
 from app.core.usage_tracker import log_event, update_aggregates
+from app.core.event_builder import enrich_usage_event
 from app.db.firestore import get_firestore_client
 from app.schemas.responses import UsageIngestResponse
 from app.schemas.usage_event import UsageEvent
@@ -22,6 +23,7 @@ async def ingest_usage_event(
     request: Request = None,
 ) -> UsageIngestResponse:
     event = payload.dict()
+    event = enrich_usage_event(event)
     event.setdefault("eventId", event["requestId"])
     LOGGER.info(
         "Usage ingest request received",
