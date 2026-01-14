@@ -145,13 +145,17 @@ def finalize_event(
 def parse_gemini_usage(response_json: Dict[str, Any]) -> Dict[str, int]:
     LOGGER.info("Parsing Gemini usage", extra={"payload": response_json})
     usage = _resolve_usage_payload(response_json)
-    return _parse_token_counts(usage)
+    parsed = _parse_token_counts(usage)
+    LOGGER.info("Parsed Gemini usage tokens", extra=parsed)
+    return parsed
 
 
 def parse_openai_usage(response_json: Dict[str, Any]) -> Dict[str, int]:
     LOGGER.info("Parsing OpenAI usage", extra={"payload": response_json})
     usage = _resolve_usage_payload(response_json)
-    return _parse_token_counts(usage)
+    parsed = _parse_token_counts(usage)
+    LOGGER.info("Parsed OpenAI usage tokens", extra=parsed)
+    return parsed
 
 
 def enrich_usage_event(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -170,6 +174,15 @@ def enrich_usage_event(event: Dict[str, Any]) -> Dict[str, Any]:
             event.setdefault("inputTokens", usage.get("inputTokens", 0))
             event.setdefault("outputTokens", usage.get("outputTokens", 0))
             event.setdefault("totalTokens", usage.get("totalTokens", 0))
+            LOGGER.info(
+                "Usage tokens backfilled from rawUsage",
+                extra={
+                    "provider": provider,
+                    "inputTokens": event.get("inputTokens"),
+                    "outputTokens": event.get("outputTokens"),
+                    "totalTokens": event.get("totalTokens"),
+                },
+            )
 
     input_tokens = _to_int(event.get("inputTokens"))
     output_tokens = _to_int(event.get("outputTokens"))
@@ -187,6 +200,17 @@ def enrich_usage_event(event: Dict[str, Any]) -> Dict[str, Any]:
         )
         if event.get("costTRY") is None:
             event["costTRY"] = round(_calculate_cost_try(cost_usd), 6)
+        LOGGER.info(
+            "Usage cost calculated",
+            extra={
+                "model": model,
+                "inputTokens": input_tokens,
+                "outputTokens": output_tokens,
+                "costUSD": event.get("costUSD"),
+                "costTRY": event.get("costTRY"),
+                "fx": event.get("fx"),
+            },
+        )
     return _compact(event)
 
 
@@ -252,6 +276,7 @@ def _resolve_usage_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _parse_token_counts(usage: Dict[str, Any]) -> Dict[str, int]:
+    thoughts_tokens = _to_int(usage.get("thoughtsTokenCount"))
     input_tokens = _to_int(
         usage.get("promptTokenCount")
         or usage.get("prompt_tokens")
@@ -265,6 +290,7 @@ def _parse_token_counts(usage: Dict[str, Any]) -> Dict[str, int]:
         or usage.get("outputTokens")
         or usage.get("output_tokens")
     )
+    output_tokens += thoughts_tokens
     total_tokens = _to_int(
         usage.get("totalTokenCount")
         or usage.get("total_tokens")

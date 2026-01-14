@@ -70,6 +70,11 @@ def update_aggregates(db: firestore.Client, event: Dict[str, Any]) -> bool:
             "userId": user_id,
             "day": day_key,
             "month": month_key,
+            "inputTokens": event.get("inputTokens"),
+            "outputTokens": event.get("outputTokens"),
+            "totalTokens": event.get("totalTokens"),
+            "costUSD": event.get("costUSD"),
+            "costTRY": event.get("costTRY"),
         },
     )
     if not acquire_request_lock(
@@ -210,6 +215,20 @@ def _build_aggregate_update(
             "totalCostTry": firestore.Increment(resolved_cost_try),
             "totalCostUsd": firestore.Increment(cost_usd),
         }
+    )
+
+    LOGGER.info(
+        "UsageTracking aggregate increments prepared",
+        extra={
+            "requestId": event.get("requestId"),
+            "userId": event.get("userId"),
+            "day": day_key,
+            "month": month_key,
+            "inputTokens": input_tokens,
+            "outputTokens": output_tokens,
+            "costTRY": resolved_cost_try,
+            "costUSD": cost_usd,
+        },
     )
 
     action = event.get("action")

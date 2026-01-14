@@ -22,16 +22,36 @@ async def ingest_usage_event(
     db: firestore.Client = Depends(get_firestore_client),
     request: Request = None,
 ) -> UsageIngestResponse:
-    event = payload.dict()
+    # Exclude unset so enrich_usage_event can backfill from rawUsage
+    event = payload.dict(exclude_unset=True)
+    LOGGER.info(
+        "Usage ingest payload received (pre-enrich)",
+        extra={
+            "requestId": event.get("requestId"),
+            "userId": event.get("userId"),
+            "endpoint": event.get("endpoint"),
+            "action": event.get("action"),
+            "rawUsage": event.get("rawUsage"),
+            "inputTokens": event.get("inputTokens"),
+            "outputTokens": event.get("outputTokens"),
+            "costUSD": event.get("costUSD"),
+        },
+    )
     event = enrich_usage_event(event)
     event.setdefault("eventId", event["requestId"])
     LOGGER.info(
-        "Usage ingest request received",
+        "Usage ingest request received (post-enrich)",
         extra={
             "requestId": event.get("requestId"),
             "eventId": event.get("eventId"),
             "userId": event.get("userId"),
             "endpoint": event.get("endpoint"),
+            "action": event.get("action"),
+            "inputTokens": event.get("inputTokens"),
+            "outputTokens": event.get("outputTokens"),
+            "totalTokens": event.get("totalTokens"),
+            "costUSD": event.get("costUSD"),
+            "costTRY": event.get("costTRY"),
             "headers": dict(request.headers) if request else {},
         },
     )
