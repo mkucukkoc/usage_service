@@ -96,6 +96,16 @@ def calculate_cost_usd(
         )
         return 0.0, 0.0, 0.0
     config = pricing[normalized]
+    LOGGER.info(
+        "Pricing config selected",
+        extra={
+            "model": model,
+            "normalized": normalized,
+            "inputRatePer1M": config.input_per_1m,
+            "outputRatePer1M": config.output_per_1m,
+            "currency": config.currency,
+        },
+    )
     input_cost = (input_tokens / 1_000_000) * config.input_per_1m
     output_cost = (output_tokens / 1_000_000) * config.output_per_1m
     LOGGER.info(

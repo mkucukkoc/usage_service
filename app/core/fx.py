@@ -62,5 +62,8 @@ class FxRateCache:
         if base.upper() == quote.upper():
             LOGGER.info("FX provider: base equals quote, using 1.0", extra={"base": base, "quote": quote})
             return 1.0
+        if base.upper() == "USD" and quote.upper() == "TRY":
+            LOGGER.info("FX provider fixed USD/TRY rate used", extra={"base": base, "quote": quote, "rate": 43.0})
+            return 43.0
         LOGGER.info("FX provider stub rate used", extra={"base": base, "quote": quote, "rate": 30.0})
         return 30.0

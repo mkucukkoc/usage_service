@@ -189,6 +189,15 @@ def enrich_usage_event(event: Dict[str, Any]) -> Dict[str, Any]:
     if (input_tokens or output_tokens) and not event.get("costUSD"):
         model = event.get("model") or ""
         currency = event.get("userCurrency") or DEFAULT_CURRENCY
+        LOGGER.info(
+            "Usage cost calculation start",
+            extra={
+                "model": model,
+                "inputTokens": input_tokens,
+                "outputTokens": output_tokens,
+                "currency": currency,
+            },
+        )
         cost_usd = _calculate_cost_usd_safe(model, input_tokens, output_tokens)
         cost_local, fx_payload = _calculate_local_cost(cost_usd, currency)
         event.setdefault("costUSD", round(cost_usd, 6))
@@ -236,6 +245,16 @@ def _calculate_local_cost(cost_usd: float, currency: str) -> tuple[float, Option
             "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
     fx = _FX_CACHE.get_or_fetch("USD", currency)
+    LOGGER.info(
+        "FX applied for local cost",
+        extra={
+            "base": fx.base,
+            "quote": fx.quote,
+            "rate": fx.rate,
+            "costUSD": cost_usd,
+            "costLocal": cost_usd * fx.rate,
+        },
+    )
     return cost_usd * fx.rate, {
         "base": fx.base,
         "quote": fx.quote,
